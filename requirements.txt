@@ -1,3 +1,2 @@
 tinkoff~=0.1.1
-grpcio~=1.70.0
 python-dotenv~=1.0.1

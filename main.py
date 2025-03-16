@@ -1,15 +1,11 @@
-from grpc.aio import ClientInterceptor
-from tinkoff.invest import Client
+from tinkoff.invest import Client, InstrumentIdType, OrderDirection, OrderType
 import time
 
 from config import TOKEN, API_TARGET
-from utils.account import sandbox_pay_in, get_balance
-from utils.operations import get_portfolio
-from utils.instruments import get_figi
+from utils.account import sandbox_pay_in, get_balance, get_accounts
+from utils.instruments import get_figi, get_instrument_lot
 from utils.logger import logger
-
-# === Вставь свой токен для песочницы ===
-# TOKEN = 'ТВОЙ_API_КЛЮЧ'
+from utils.orders import sandbox_place_market_order
 
 # === FIGI для выбранных акций ===
 FIGI_LIST = {
@@ -20,96 +16,73 @@ FIGI_LIST = {
     'YNDX': 'BBG006L8G4H1'  # Яндекс
 }
 
-
-# === Пополнение баланса в песочнице ===
-# def sandbox_pay_in(client, account_id, currency='RUB', balance=100000):
-#     try:
-#         request = tinvest.SandboxSetCurrencyBalanceRequest(
-#             currency=currency,
-#             balance=balance
-#         )
-#         client.set_sandbox_currencies_balance(request)
-#         print(f"✅ Баланс песочницы пополнен на {balance} {currency}")
-#     except Exception as e:
-#         print(f"❌ Ошибка при пополнении баланса: {e}")
-
 with Client(TOKEN, target=API_TARGET) as client:
-    # === Проверка текущего портфеля ===
-    # def get_balance():
-    #     try:
-    #         response = client.operations.get_portfolio()
-    #         positions = response.positions
-    #         if len(positions) == 0:
-    #             print("Портфель пуст.")
-    #         else:
-    #             print("\nТекущий портфель:")
-    #             for position in positions:
-    #                 print(f"{position.name}: {position.balance} {position.currency}")
-    #     except Exception as e:
-    #         print(f"❌ Ошибка при получении баланса: {e}")
-
-
-    # === Проверка FIGI для акций (опционально) ===
-    # def get_figi():
-    #     try:
-    #         response = client.get_market_stocks()
-    #         stocks = response.payload.instruments
-    #         print("\nДоступные FIGI:")
-    #         for stock in stocks:
-    #             if stock.ticker in FIGI_LIST:
-    #                 print(f"{stock.ticker}: {stock.figi}")
-    #     except Exception as e:
-    #         print(f"❌ Ошибка при получении FIGI: {e}")
-
-
-    # === Выставление рыночного ордера ===
-    def place_market_order(figi, quantity, direction):
-        try:
-            order = tinvest.MarketOrderRequest(
-                lots=quantity,
-                operation=direction
-            )
-            response = client.post_orders_market_order(figi=figi, market_order_request=order)
-            print(f"✅ Ордер {'покупки' if direction == 'Buy' else 'продажи'} для {figi} выполнен: {response.payload}")
-        except Exception as e:
-            print(f"❌ Ошибка при выставлении ордера для {figi}: {e}")
-
-
     # === Имитация скальпинга ===
-    def scalping(figi_list):
+    def scalping(figi_list, account_id):
         for ticker, figi in figi_list.items():
-            print(f"\n🚀 Скальпинг для {ticker} ({figi})")
+            logger.info(f"Скальпинг для {ticker} ({figi})")
+            instrument_last_price = client.market_data.get_last_prices(figi=[figi])
+
+            logger.info(f"Последняя цена акции: {instrument_last_price.last_prices[0].price}")
+
+            figi_lot = get_instrument_lot(client=client, instrument_id=figi,
+                                          id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI)
+            logger.info(f"Лотность акции: {figi_lot}")
 
             # Покупаем один лот
-            print(f"Покупка {ticker}...")
-            place_market_order(figi, 1, 'Buy')
+            logger.info(f"Покупка {ticker}...")
+            buy_order = sandbox_place_market_order(
+                account_id=account_id,
+                client=client,
+                instrument_id=figi,
+                direction=OrderDirection.ORDER_DIRECTION_BUY,
+                quantity=1,
+                price=(instrument_last_price.last_prices[0].price.units * figi_lot),
+                order_type=OrderType.ORDER_TYPE_LIMIT
+            )
+            logger.info(f'Покупка акции: {ticker}, {buy_order}')
             time.sleep(1)  # Задержка в 1 сек для имитации реальной торговли
 
             # Продаём один лот
-            print(f"Продажа {ticker}...")
-            place_market_order(figi, 1, 'Sell')
+            logger.info(f"Продажа {ticker}...")
+            sell_order = sandbox_place_market_order(
+                client=client,
+                instrument_id=figi,
+                direction=OrderDirection.ORDER_DIRECTION_SELL,
+                account_id=account_id,
+                order_type=OrderType.ORDER_TYPE_MARKET,
+                quantity=1
+            )
+            logger.info(f'Продажа акции: {ticker}, {sell_order}')
+
             time.sleep(1)
 
 
     # === Основной блок программы ===
-    print("\n--- Подключение к API Тинькофф в песочнице ---")
+    logger.info("--- Подключение к API Тинькофф в песочнице ---")
+    accounts = get_accounts(client)
+    account_id = accounts.accounts[0].id
 
     # Пополнение счёта
-    print("\n--- Пополнение счёта в песочнице ---")
-    sandbox_pay_in()
+    logger.info("--- Пополнение счёта в песочнице ---")
+    sandbox_pay_in(client, account_id=account_id, amount=10000)
 
     # Проверяем баланс после пополнения
-    print("\n--- Проверяем баланс после пополнения ---")
-    get_balance()
+    logger.info("--- Проверяем баланс после пополнения ---")
+    account_balance = get_balance(client, account_id)
+    logger.info(f"--- Текущий баланс:  {account_balance} ---")
 
     # Проверяем FIGI (необязательно, можно закомментировать)
-    print("\n--- Проверяем FIGI для выбранных акций ---")
-    get_figi()
+    logger.info("--- Проверяем FIGI для выбранных акций ---")
+    # get_figi()
 
     # Выполняем скальпинг по всем инструментам в списке
-    print("\n--- Начинаем скальпинг для выбранных акций ---")
-    scalping(FIGI_LIST)
+    logger.info("--- Начинаем скальпинг для выбранных акций ---")
+    scalping(FIGI_LIST, account_id)
 
     # Проверяем баланс после торговли
-    print("\n--- Проверяем баланс после скальпинга ---")
-    get_balance()
+    logger.info("--- Проверяем баланс после скальпинга ---")
+    account_balance = get_balance()
+    logger.info(f"\n--- Текущий баланс:  {account_balance} ---")
+
+    logger.warn('--- END ---')
