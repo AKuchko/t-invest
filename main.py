@@ -12,7 +12,7 @@ FIGI_LIST = {
     'SBER': 'BBG004730N88',  # Сбербанк
     'GAZP': 'BBG004730RP0',  # Газпром
     'LKOH': 'BBG004731032',  # Лукойл
-    'GMKN': 'BBG00475K6G7',  # Норникель
+    # 'GMKN': 'BBG00475K6G7',  # Норникель
     'YNDX': 'BBG006L8G4H1'  # Яндекс
 }
 
@@ -82,7 +82,7 @@ with Client(TOKEN, target=API_TARGET) as client:
 
     # Проверяем баланс после торговли
     logger.info("--- Проверяем баланс после скальпинга ---")
-    account_balance = get_balance()
+    account_balance = get_balance(client, account_id)
     logger.info(f"\n--- Текущий баланс:  {account_balance} ---")
 
-    logger.warn('--- END ---')
+    logger.warning('--- END ---')
