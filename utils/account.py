@@ -21,7 +21,8 @@ def sandbox_pay_in(client, account_id, amount, currency="rub"):
         logger.exception(f"❌ Ошибка при пополнении баланса: {e}")
 
 def get_accounts(client):
-    return client.users.get_accounts()
+    response = client.users.get_accounts()
+    return response.accounts
 
 def get_balance(client, account_id):
     positions = client.operations.get_positions(account_id=account_id)

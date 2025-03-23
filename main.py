@@ -83,6 +83,6 @@ with Client(TOKEN, target=API_TARGET) as client:
     # Проверяем баланс после торговли
     logger.info("--- Проверяем баланс после скальпинга ---")
     account_balance = get_balance(client, account_id)
-    logger.info(f"\n--- Текущий баланс:  {account_balance} ---")
+    logger.info(f"--- Текущий баланс:  {account_balance} ---")
 
     logger.warning('--- END ---')
